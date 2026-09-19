@@ -36,7 +36,7 @@ Users type a simple command like `/willow` or `/fancode`, and the bot replies wi
 
 ## 🤖 Try the bot
 
-👉 **[@Magnet10](https://t.me/Magnet10)**
+👉 **[@magnet10_bot](https://t.me/magnet10_bot)**
 
 ---
 
