@@ -36,7 +36,7 @@ Users type a simple command like `/willow` or `/fancode`, and the bot replies wi
 
 ## 🤖 Try the bot
 
-👉 **[@sportlink2026_bot](https://t.me/sportlink2026_bot)**
+👉 **[@Magnet10](https://t.me/Magnet10)**
 
 ---
 
