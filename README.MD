@@ -1,6 +1,6 @@
 # 📺 Sportlink Bot — Telegram Streaming Bot
 
-A Telegram bot that serves live sports streams from M3U playlists — deployed on **Cloudflare Workers** 
+A Telegram bot that serves live sports streams from M3U playlists — deployed on **Cloudflare Workers**
 
 Users type a simple command like `/willow` or `/fancode`, and the bot replies with all available matches as tappable buttons. Tapping a button sends the stream URL + DRM keys.
 
@@ -24,7 +24,7 @@ Users type a simple command like `/willow` or `/fancode`, and the bot replies wi
 
 ## ✨ Features
 
-- 🎯 **Multiple playlists** — Willow, Fancode, SonyLIV, and easily extendable
+- 🎯 **Multiple playlists** — Willow, Fancode, SonyLIV, Hotstar, JTV, Star, Sony, Zee — and easily extendable
 - 🔘 **Inline buttons** — every match is a tappable button, no typing IDs
 - 🔐 **DRM-aware** — extracts and sends ClearKey license keys automatically
 - ⚡ **Fast** — 5-minute cache, no repeated GitHub calls
@@ -42,17 +42,63 @@ Users type a simple command like `/willow` or `/fancode`, and the bot replies wi
 
 ## 📋 Available Commands
 
-| Command | What it does |
-|---|---|
-| `/start` | Welcome + list of playlists |
+### 🔹 General
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Welcome message + list of available playlists |
 | `/help` | Same as `/start` |
 | `/list` | Full list of every match command |
-| `/willow` | All Willow matches as buttons |
-| `/fancode` | All Fancode matches as buttons |
-| `/sonyliv` | All SonyLIV matches as buttons |
-| `/willow1` | Direct link — Willow stream #1 |
-| `/fancode2` | Direct link — Fancode stream #2 |
-| `/sonyliv1` | Direct link — SonyLIV stream #1 |
 
 ---
 
+### 📺 Platform Menus (Inline Buttons)
+
+| Command | Description |
+|---------|-------------|
+| `/willow` | All Willow matches as buttons |
+| `/fancode` | All Fancode matches as buttons |
+| `/sonyliv` | All SonyLIV matches as buttons |
+| `/hotstar` | All Hotstar matches as buttons |
+| `/jtv` | All JTV matches as buttons |
+| `/star` | All Star matches as buttons |
+| `/sony` | All Sony matches as buttons |
+| `/zee` | All Zee matches as buttons |
+
+---
+
+
+---
+
+## 🌐 Deployment
+
+This bot runs entirely on **Cloudflare Workers** — no server needed.
+
+```
+wrangler deploy
+```
+
+Set your bot token as a Worker secret:@BotFather  from this 
+
+```
+wrangler secret put TELEGRAM_BOT_TOKEN
+```
+
+---
+
+## 📡 Supported Platforms
+
+| Platform | Menu Command | Direct Command |
+|----------|-------------|----------------|
+| Willow   | `/willow`   | `/willow1`     |
+| Fancode  | `/fancode`  | `/fancode3`    |
+| SonyLIV  | `/sonyliv`  | `/sonyliv1`    |
+| Hotstar  | `/hotstar`  | `/hotstar`     |
+| JTV      | `/jtv`      | `/jtv`         |
+| Star     | `/star`     | `/star`        |
+| Sony     | `/sony`     | `/sony1`       |
+| Zee      | `/zee`      | `/zee`         |
+
+---
+
+> **Note:** Stream availability depends on match schedule and broadcasting rights.
