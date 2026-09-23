@@ -4,8 +4,13 @@
 //
 //  Commands:
 //    /willow /fancode /sonyliv /hotstar /jtv /star /sony /zee
-//    /willow1 /fancode3 /hotstar10 /jtv5 /star2 /sony1 /zee1
+//    /jtv153       → item with tvg-id="153"  (ONLY tvg-id lookup for jtv)
+//    /willow5      → 5th item (index based for all other playlists)
 //    /list /help
+//
+//  Bot ONLY responds to:
+//    /command
+//    /command@magnet10_bot
 // ================================================================
 
 const PLAYLISTS = {
@@ -13,28 +18,68 @@ const PLAYLISTS = {
   fancode: "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.m3u",
   sonyliv: "https://raw.githubusercontent.com/drmlive/sliv-live-events/refs/heads/main/sonyliv.m3u",
   hotstar: "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/hotstar.m3u",
-  jtv:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/jtvplus7.m3u",
-  star:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/Star.m3u",
-  sony:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/sony5.m3u",
+  jtv:     "https://raw.githubusercontent.com/sportlink10/playlist/refs/heads/main/jtvplus7.m3u",
+  star:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/Star2.m3u",
+  sony:    "https://raw.githubusercontent.com/sportlink10/playlist/refs/heads/main/sony5.m3u",
   zee:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/zee.m3u"
 };
 
-// Per-source defaults for Referer / Origin
+const BOT_USERNAME = 'magnet10_bot';
+
+const TVGID_ONLY     = ['jtv'];
+const PIPE_PLAYLISTS = ['hotstar', 'star', 'jtv', 'sony', 'zee'];
+
 const HEADER_DEFAULTS = {
   willow:  { referer: '', origin: '' },
   fancode: { referer: '', origin: '' },
   sonyliv: { referer: 'https://www.sonyliv.com/',  origin: 'https://www.sonyliv.com' },
   hotstar: { referer: 'https://www.hotstar.com/',  origin: 'https://www.hotstar.com' },
-  jtv:     { referer: '', origin: '' },
-  star:    { referer: '', origin: '' },
-  sony:    { referer: 'https://www.sonyliv.com/',  origin: 'https://www.sonyliv.com' },
-  zee:     { referer: '', origin: '' }
+  jtv:     { referer: 'https://www.jiotv.com/',    origin: 'https://www.jiotv.com' },
+  star:    { referer: 'https://www.hotstar.com/',  origin: 'https://www.hotstar.com' },
+  sony:    { referer: 'https://www.sonyliv.com/',    origin: 'https://www.sonyliv.com/' },
+  zee:     { referer: '',    origin: '' }
 };
 
-// 5-minute cache
+const CHANNEL_TG = 'https://t.me/sportlink10';
+const CHANNEL_WA = 'https://whatsapp.com/channel/0029VbC2oQsC6ZvmwpR3v73v';
+const WEB_BASE   = 'https://sportlink10-ajp.pages.dev';
+
+const CAPTION_LIMIT = 1024;
+
+// ---------- Keyboards ----------
+
+// Generic: promo buttons only
+function channelKeyboard(extraRows = []) {
+  return [
+    ...extraRows,
+    [{ text: '📢 Join Telegram Channel', url: CHANNEL_TG }],
+    [{ text: '💬 Join WhatsApp Channel', url: CHANNEL_WA }]
+  ];
+}
+
+// Playlist listing: Web + promo
+function playlistKeyboard(playlistKey, extraRows = []) {
+  return [
+    [{ text: `🌐 Web Page: /${playlistKey}`, url: `${WEB_BASE}/${playlistKey}` }],
+    ...extraRows,
+    [{ text: '📢 Join Telegram Channel', url: CHANNEL_TG }],
+    [{ text: '💬 Join WhatsApp Channel', url: CHANNEL_WA }]
+  ];
+}
+
+// Single-link reply: Web + promo
+function streamKeyboard(playlistKey, extraRows = []) {
+  return [
+    [{ text: `🌐 Web Page: /${playlistKey}`, url: `${WEB_BASE}/${playlistKey}` }],
+    ...extraRows,
+    [{ text: '📢 Join Telegram Channel', url: CHANNEL_TG }],
+    [{ text: '💬 Join WhatsApp Channel', url: CHANNEL_WA }]
+  ];
+}
+
 let cache = { data: null, expiry: 0 };
 
-// ---------- Extract cookie from EXTHTTP JSON (case-insensitive) ----------
+// ---------- Cookie from EXTHTTP JSON ----------
 function extractCookieFromJson(str) {
   try {
     const json = JSON.parse(str);
@@ -107,7 +152,6 @@ function parseM3U(content) {
     else if (line.startsWith('#EXTVLCOPT:http-extra-headers=Origin:') && current) {
       current.origin = line.split('Origin:')[1]?.trim() || '';
     }
-    // Catch-all for any #header=...# patterns not caught above
     else if (line.startsWith('#EXTVLCOPT:') && current) {
       const rest = line.substring('#EXTVLCOPT:'.length);
       const eq   = rest.indexOf('=');
@@ -128,7 +172,6 @@ function parseM3U(content) {
   return streams;
 }
 
-// ---------- Fetch + cache playlists ----------
 async function getStreams() {
   const now = Date.now();
   if (cache.data && cache.expiry > now) return cache.data;
@@ -151,7 +194,6 @@ async function getStreams() {
   return all;
 }
 
-// ---------- Telegram API helper ----------
 async function tg(method, payload, env) {
   const r = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/${method}`, {
     method: 'POST',
@@ -178,8 +220,7 @@ function escapeMd(s) {
   return String(s).replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1');
 }
 
-// ---------- Build final stream URL — UNIFIED FOR ALL SOURCES ----------
-//   <url>|Cookie=<c>&Referer=<r>&Origin=<o>[&drmScheme=clearkey&drmLicense=<d>]
+// ---------- Final PIPE URL ----------
 function buildFinalUrl(playlistKey, s) {
   const url = s.url;
   const def = HEADER_DEFAULTS[playlistKey] || { referer: '', origin: '' };
@@ -201,13 +242,138 @@ function buildFinalUrl(playlistKey, s) {
   return parts.length ? `${url}|${parts.join('&')}` : url;
 }
 
-// ---------- Build message text ----------
+function finalLink(playlistKey, s) {
+  return PIPE_PLAYLISTS.includes(playlistKey) ? buildFinalUrl(playlistKey, s) : s.url;
+}
+
+// ---------- Backtick code wrapper ----------
+function asCode(link) {
+  const clean = String(link).replace(/`/g, '');
+  return '`' + clean + '`';
+}
+
+// ---------- Short photo caption ----------
+function photoCaptionShort(num, s) {
+  return `${num}) ${s.name}`;
+}
+
+// ---------- Markdown caption for photo (copyable link) ----------
+function markdownCaption(playlistKey, num, s) {
+  const link = finalLink(playlistKey, s);
+  let t = `*${num}\\)* ${escapeMd(s.name)}\n`;
+  if (s.id)    t += `🆔 ${escapeMd(s.id)}\n`;
+  if (s.group) t += `🏷 ${escapeMd(s.group)}\n`;
+  t += `\n${asCode(link)}`;
+  return t;
+}
+
+// ---------- Plain fallback caption ----------
+function plainCaption(playlistKey, num, s) {
+  const link = finalLink(playlistKey, s);
+  let t = `${num}) ${s.name}`;
+  if (s.id) t += `\n🆔 ${s.id}`;
+  if (s.group) t += `\n🏷 ${s.group}`;
+  t += `\n\n${link}`;
+  return t;
+}
+
+// ---------- Markdown message for no-logo fallback ----------
 function streamMessage(playlistKey, s) {
-  const finalUrl = buildFinalUrl(playlistKey, s);
+  const link = finalLink(playlistKey, s);
   let msg = `📺 *${escapeMd(s.name)}*\n`;
+  if (s.id)    msg += `🆔 ${escapeMd(s.id)}\n`;
   if (s.group) msg += `🏷 ${escapeMd(s.group)}\n`;
-  msg += `\n\`${finalUrl}\``;
+  msg += `\n${asCode(link)}`;
   return msg;
+}
+
+// ---------- Send ONE stream ----------
+async function sendStream(chatId, playlistKey, s, env, extraKeyboard = []) {
+  const keyboard = streamKeyboard(playlistKey, extraKeyboard);
+
+  const mdCaption     = markdownCaption(playlistKey, 1, s);
+  const plainCaptionV = plainCaption(playlistKey, 1, s);
+
+  if (s.logo && /^https?:\/\//i.test(s.logo)) {
+    // 1) Markdown caption (with copyable link)
+    if (mdCaption.length <= CAPTION_LIMIT) {
+      try {
+        const r = await tg('sendPhoto', {
+          chat_id: chatId,
+          photo: s.logo,
+          caption: mdCaption,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: keyboard }
+        }, env);
+        if (r && r.ok) return;
+        console.log('sendPhoto markdown failed:', JSON.stringify(r));
+      } catch (e) {
+        console.log('sendPhoto exception:', e.message);
+      }
+    }
+
+    // 2) Plain-text caption (still contains link, no copy bubble)
+    if (plainCaptionV.length <= CAPTION_LIMIT) {
+      try {
+        const r = await tg('sendPhoto', {
+          chat_id: chatId,
+          photo: s.logo,
+          caption: plainCaptionV,
+          reply_markup: { inline_keyboard: keyboard }
+        }, env);
+        if (r && r.ok) return;
+      } catch (e) {}
+    }
+
+    // 3) Short caption on photo + full link as reply
+    try {
+      const r = await tg('sendPhoto', {
+        chat_id: chatId,
+        photo: s.logo,
+        caption: photoCaptionShort(1, s),
+        reply_markup: { inline_keyboard: keyboard }
+      }, env);
+      if (r && r.ok && r.result && r.result.message_id) {
+        await tg('sendMessage', {
+          chat_id: chatId,
+          text: streamMessage(playlistKey, s),
+          parse_mode: 'Markdown',
+          disable_web_page_preview: true,
+          reply_to_message_id: r.result.message_id,
+          reply_markup: { inline_keyboard: streamKeyboard(playlistKey) }
+        }, env);
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // 4) No logo → Markdown text message
+  await tg('sendMessage', {
+    chat_id: chatId,
+    text: streamMessage(playlistKey, s),
+    parse_mode: 'Markdown',
+    disable_web_page_preview: true,
+    reply_markup: { inline_keyboard: keyboard }
+  }, env);
+}
+
+// ================================================================
+function extractCommand(rawText) {
+  if (!rawText) return null;
+  const t = rawText.trim();
+  if (!t.startsWith('/')) return null;
+
+  const firstWord = t.split(/\s+/)[0];
+  const body      = firstWord.substring(1);
+
+  const atIdx = body.indexOf('@');
+  const cmd   = atIdx === -1 ? body : body.substring(0, atIdx);
+  const user  = atIdx === -1 ? null : body.substring(atIdx + 1);
+
+  if (!cmd) return null;
+  if (user && user.toLowerCase() !== BOT_USERNAME.toLowerCase()) return null;
+
+  return cmd.toLowerCase();
 }
 
 // ================================================================
@@ -218,23 +384,36 @@ export default {
     // -------- Debug endpoint --------
     if (url.pathname.startsWith('/debug/')) {
       const [, , key, idxStr] = url.pathname.split('/');
-      const idx = parseInt(idxStr) - 1;
       const streams = await getStreams();
       const list = streams[key] || [];
-      const s = list[idx];
+
+      let s;
+      if (TVGID_ONLY.includes(key)) {
+        s = list.find(x => x.id && String(x.id) === idxStr);
+      } else {
+        s = list[parseInt(idxStr) - 1];
+      }
+
       if (!s) return new Response(`No entry /${key}/${idxStr}`, { status: 404 });
+
+      const finalUrl  = finalLink(key, s);
+      const mdCaption = markdownCaption(key, 1, s);
+
       return new Response(JSON.stringify({
         playlist:      key,
-        index:         idx + 1,
+        tvgId:         s.id,
         name:          s.name,
         group:         s.group,
+        logo:          s.logo || '(none)',
         url:           s.url,
         cookieLen:     s.cookie ? s.cookie.length : 0,
         cookiePreview: s.cookie ? s.cookie.substring(0, 120) + '...' : '(empty)',
         drm:           s.drm || '(none)',
         referer:       s.referer || HEADER_DEFAULTS[key]?.referer || '',
         origin:        s.origin  || HEADER_DEFAULTS[key]?.origin  || '',
-        finalUrl:      buildFinalUrl(key, s)
+        finalUrl,
+        captionLen:    mdCaption.length,
+        fitsInCaption: mdCaption.length <= CAPTION_LIMIT
       }, null, 2), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -276,12 +455,7 @@ export default {
               text: 'Link sent below!'
             }, env);
 
-            await tg('sendMessage', {
-              chat_id: chatId,
-              text: streamMessage(playlistKey, stream),
-              parse_mode: 'Markdown',
-              disable_web_page_preview: true
-            }, env);
+            await sendStream(chatId, playlistKey, stream, env);
           } else {
             await tg('answerCallbackQuery', {
               callback_query_id: cq.id,
@@ -294,10 +468,12 @@ export default {
 
       // ===== TEXT MESSAGE =====
       if (!update.message) return new Response('OK');
+      if (!update.message.text) return new Response('OK');
 
-      const chatId  = update.message.chat.id;
-      const text    = update.message.text || '';
-      const command = text.split(' ')[0].substring(1).toLowerCase();
+      const command = extractCommand(update.message.text);
+      if (!command) return new Response('OK');
+
+      const chatId = update.message.chat.id;
 
       // ---- /start & /help ----
       if (command === 'start' || command === 'help') {
@@ -313,14 +489,17 @@ export default {
         msg += `• /star — ${streams.star.length} channels\n`;
         msg += `• /sony — ${streams.sony.length} channels\n`;
         msg += `• /zee — ${streams.zee.length} channels\n\n`;
-        msg += 'Direct access: `/willow1`, `/hotstar10`, `/jtv5`, `/zee3`, etc.\n';
+        msg += '*Direct access:*\n';
+        msg += '• `/jtv153` → JioTV channel with **tvg-id=153**\n';
+        msg += '• `/willow5` → 5th item in willow playlist\n';
         msg += 'Use /list for the full list.';
 
         await tg('sendMessage', {
           chat_id: chatId,
           text: msg,
           parse_mode: 'Markdown',
-          disable_web_page_preview: true
+          disable_web_page_preview: true,
+          reply_markup: { inline_keyboard: channelKeyboard() }
         }, env);
         return new Response('OK');
       }
@@ -332,7 +511,8 @@ export default {
         for (const [key, list] of Object.entries(streams)) {
           msg += `*${key.toUpperCase()}* (${list.length})\n`;
           list.forEach((s, i) => {
-            msg += `  \`/${key}${i + 1}\` — ${escapeMd(shortLabel(s.name, 45))}\n`;
+            const suffix = TVGID_ONLY.includes(key) && s.id ? s.id : String(i + 1);
+            msg += `  \`/${key}${suffix}\` — ${escapeMd(shortLabel(s.name, 45))}\n`;
           });
           msg += '\n';
         }
@@ -340,12 +520,13 @@ export default {
           chat_id: chatId,
           text: msg,
           parse_mode: 'Markdown',
-          disable_web_page_preview: true
+          disable_web_page_preview: true,
+          reply_markup: { inline_keyboard: channelKeyboard() }
         }, env);
         return new Response('OK');
       }
 
-      // ---- /willow, /fancode, /hotstar, /zee, etc. → buttons ----
+      // ---- Playlist command → buttons ----
       if (PLAYLISTS[command]) {
         const streams = await getStreams();
         const list    = streams[command] || [];
@@ -353,12 +534,15 @@ export default {
         if (!list.length) {
           await tg('sendMessage', {
             chat_id: chatId,
-            text: `⚠️ No items available in /${command} right now.`
+            text: `⚠️ No items available in /${command} right now.`,
+            reply_markup: { inline_keyboard: playlistKeyboard(command) }
           }, env);
           return new Response('OK');
         }
 
-        const keyboard = buildKeyboard(command, list);
+        const itemRows = buildKeyboard(command, list);
+        const keyboard = playlistKeyboard(command, itemRows);
+
         await tg('sendMessage', {
           chat_id: chatId,
           text: `📺 *${command.toUpperCase()}* — ${list.length} item${list.length > 1 ? 's' : ''}\n\nTap an item to get the link:`,
@@ -368,25 +552,38 @@ export default {
         return new Response('OK');
       }
 
-      // ---- /willow1, /hotstar10, /zee3, etc. ----
+      // ---- /willow5, /hotstar10, /jtv153, /zee123 ----
       const m = command.match(/^([a-z]+)(\d+)$/);
       if (m && PLAYLISTS[m[1]]) {
         const playlistKey = m[1];
-        const index       = parseInt(m[2]) - 1;
+        const numStr      = m[2];
+        const num         = parseInt(numStr, 10);
         const streams     = await getStreams();
         const list        = streams[playlistKey] || [];
 
-        if (list[index]) {
-          await tg('sendMessage', {
-            chat_id: chatId,
-            text: streamMessage(playlistKey, list[index]),
-            parse_mode: 'Markdown',
-            disable_web_page_preview: true
-          }, env);
+        let stream      = null;
+        let notFoundMsg = '';
+
+        if (TVGID_ONLY.includes(playlistKey)) {
+          stream = list.find(s => s.id && String(s.id) === numStr);
+          if (!stream) {
+            notFoundMsg = `❌ No channel with *tvg-id* \`${numStr}\` in /${playlistKey}.\nUse /${playlistKey} to see available channels.`;
+          }
+        } else {
+          stream = list[num - 1];
+          if (!stream) {
+            notFoundMsg = `❌ Item #${num} not found in /${playlistKey}.\nUse /${playlistKey} to see available items.`;
+          }
+        }
+
+        if (stream) {
+          await sendStream(chatId, playlistKey, stream, env);
         } else {
           await tg('sendMessage', {
             chat_id: chatId,
-            text: `❌ Item #${index + 1} not found in /${playlistKey}.\nUse /${playlistKey} to see available items.`
+            text: notFoundMsg,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: playlistKeyboard(playlistKey) }
           }, env);
         }
         return new Response('OK');
@@ -395,7 +592,8 @@ export default {
       // ---- Unknown ----
       await tg('sendMessage', {
         chat_id: chatId,
-        text: `❌ Unknown command: /${command}\nTry /willow, /fancode, /sonyliv, /hotstar, /jtv, /star, /sony, /zee, or /help.`
+        text: `❌ Unknown command: /${command}\nTry /willow, /fancode, /sonyliv, /hotstar, /jtv, /star, /sony, /zee, or /help.`,
+        reply_markup: { inline_keyboard: channelKeyboard() }
       }, env);
 
       return new Response('OK');
