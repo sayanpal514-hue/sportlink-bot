@@ -3,7 +3,7 @@
 //    <url>|Cookie=<c>&Referer=<r>&Origin=<o>[&drmScheme=clearkey&drmLicense=<d>]
 //
 //  Commands:
-//    /willow /fancode /sonyliv /hotstar /jtv /star /sony /zee
+//    /willow /fancode /sonyliv /hotstar /jtv /star /sony /zee /zee5
 //    /jtv153       → item with tvg-id="153"  (ONLY tvg-id lookup for jtv)
 //    /willow5      → 5th item (index based for all other playlists)
 //    /list /help
@@ -21,13 +21,14 @@ const PLAYLISTS = {
   jtv:     "https://raw.githubusercontent.com/sportlink10/playlist/refs/heads/main/jtvplus7.m3u",
   star:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/Star2.m3u",
   sony:    "https://raw.githubusercontent.com/sportlink10/playlist/refs/heads/main/sony5.m3u",
-  zee:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/zee.m3u"
+  zee:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/zee.m3u",
+  zee5:    "https://raw.githubusercontent.com/doctor-8trange/quarnex/refs/heads/main/data/zee5.m3u"
 };
 
 const BOT_USERNAME = 'magnet10_bot';
 
 const TVGID_ONLY     = ['jtv'];
-const PIPE_PLAYLISTS = ['hotstar', 'star', 'jtv', 'sony', 'zee'];
+const PIPE_PLAYLISTS = ['willow', 'fancode', 'hotstar', 'star', 'jtv', 'sony', 'zee', 'zee5'];
 
 const HEADER_DEFAULTS = {
   willow:  { referer: '', origin: '' },
@@ -36,8 +37,13 @@ const HEADER_DEFAULTS = {
   hotstar: { referer: 'https://www.hotstar.com/',  origin: 'https://www.hotstar.com' },
   jtv:     { referer: 'https://www.jiotv.com/',    origin: 'https://www.jiotv.com' },
   star:    { referer: 'https://www.hotstar.com/',  origin: 'https://www.hotstar.com' },
-  sony:    { referer: 'https://www.sonyliv.com/',    origin: 'https://www.sonyliv.com/' },
-  zee:     { referer: '',    origin: '' }
+  sony:    { referer: 'https://www.sonyliv.com/',  origin: 'https://www.sonyliv.com' },
+  zee:     { referer: '',                          origin: '' },
+  zee5:    {
+    referer:   'https://www.zee5.com/',
+    origin:    'https://www.zee5.com',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:155.0) Gecko/20100101 Firefox/155.0'
+  }
 };
 
 const CHANNEL_TG = 'https://t.me/sportlink10';
@@ -47,8 +53,6 @@ const WEB_BASE   = 'https://sportlink10-ajp.pages.dev';
 const CAPTION_LIMIT = 1024;
 
 // ---------- Keyboards ----------
-
-// Generic: promo buttons only
 function channelKeyboard(extraRows = []) {
   return [
     ...extraRows,
@@ -57,7 +61,6 @@ function channelKeyboard(extraRows = []) {
   ];
 }
 
-// Playlist listing: Web + promo
 function playlistKeyboard(playlistKey, extraRows = []) {
   return [
     [{ text: `🌐 Web Page: /${playlistKey}`, url: `${WEB_BASE}/${playlistKey}` }],
@@ -67,7 +70,6 @@ function playlistKeyboard(playlistKey, extraRows = []) {
   ];
 }
 
-// Single-link reply: Web + promo
 function streamKeyboard(playlistKey, extraRows = []) {
   return [
     [{ text: `🌐 Web Page: /${playlistKey}`, url: `${WEB_BASE}/${playlistKey}` }],
@@ -221,11 +223,16 @@ function escapeMd(s) {
 }
 
 // ---------- Final PIPE URL ----------
+//   <url>[|User-Agent=<ua>][&Cookie=<c>][&Referer=<r>][&Origin=<o>][&drmScheme=clearkey&drmLicense=<d>]
 function buildFinalUrl(playlistKey, s) {
   const url = s.url;
   const def = HEADER_DEFAULTS[playlistKey] || { referer: '', origin: '' };
   const parts = [];
 
+  // User-Agent (only if defined for this playlist — currently only zee5)
+  if (def.userAgent) parts.push(`User-Agent=${def.userAgent}`);
+
+  // Cookie (only if a separate cookie value exists — zee5 keeps it in the URL)
   if (s.cookie) parts.push(`Cookie=${s.cookie}`);
 
   const referer = s.referer || def.referer;
@@ -252,18 +259,46 @@ function asCode(link) {
   return '`' + clean + '`';
 }
 
+// ================================================================
+//  Cookie expiry (IST) — parses `exp=<unix>` from cookie OR from URL
+// ================================================================
+function getCookieExpiryIST(cookie, url) {
+  const src = cookie || url || '';
+  const m = src.match(/\bexp=(\d{9,11})/i);
+  if (!m) return '';
+  const expUnix = parseInt(m[1], 10);
+  if (!expUnix || isNaN(expUnix)) return '';
+
+  const IST_OFFSET_MIN = 5 * 60 + 30;
+  const istMs = (expUnix + IST_OFFSET_MIN * 60) * 1000;
+  const d = new Date(istMs);
+
+  const pad = n => String(n).padStart(2, '0');
+  const Y  = d.getUTCFullYear();
+  const M  = pad(d.getUTCMonth() + 1);
+  const D  = pad(d.getUTCDate());
+  const h  = pad(d.getUTCHours());
+  const m2 = pad(d.getUTCMinutes());
+  const s2 = pad(d.getUTCSeconds());
+
+  return `${Y}-${M}-${D} ${h}:${m2}:${s2} IST`;
+}
+
 // ---------- Short photo caption ----------
 function photoCaptionShort(num, s) {
   return `${num}) ${s.name}`;
 }
 
-// ---------- Markdown caption for photo (copyable link) ----------
+// ---------- Markdown caption for photo (copyable link + expiry) ----------
 function markdownCaption(playlistKey, num, s) {
   const link = finalLink(playlistKey, s);
   let t = `*${num}\\)* ${escapeMd(s.name)}\n`;
   if (s.id)    t += `🆔 ${escapeMd(s.id)}\n`;
   if (s.group) t += `🏷 ${escapeMd(s.group)}\n`;
   t += `\n${asCode(link)}`;
+
+  const exp = getCookieExpiryIST(s.cookie, s.url);
+  if (exp) t += `\n\n⏳ Cookie expires: ${exp}`;
   return t;
 }
 
@@ -274,6 +309,9 @@ function plainCaption(playlistKey, num, s) {
   if (s.id) t += `\n🆔 ${s.id}`;
   if (s.group) t += `\n🏷 ${s.group}`;
   t += `\n\n${link}`;
+
+  const exp = getCookieExpiryIST(s.cookie, s.url);
+  if (exp) t += `\n\n⏳ Cookie expires: ${exp}`;
   return t;
 }
 
@@ -284,6 +322,9 @@ function streamMessage(playlistKey, s) {
   if (s.id)    msg += `🆔 ${escapeMd(s.id)}\n`;
   if (s.group) msg += `🏷 ${escapeMd(s.group)}\n`;
   msg += `\n${asCode(link)}`;
+
+  const exp = getCookieExpiryIST(s.cookie, s.url);
+  if (exp) msg += `\n\n⏳ Cookie expires: ${exp}`;
   return msg;
 }
 
@@ -295,7 +336,7 @@ async function sendStream(chatId, playlistKey, s, env, extraKeyboard = []) {
   const plainCaptionV = plainCaption(playlistKey, 1, s);
 
   if (s.logo && /^https?:\/\//i.test(s.logo)) {
-    // 1) Markdown caption (with copyable link)
+    // 1) Markdown caption
     if (mdCaption.length <= CAPTION_LIMIT) {
       try {
         const r = await tg('sendPhoto', {
@@ -312,7 +353,7 @@ async function sendStream(chatId, playlistKey, s, env, extraKeyboard = []) {
       }
     }
 
-    // 2) Plain-text caption (still contains link, no copy bubble)
+    // 2) Plain-text caption
     if (plainCaptionV.length <= CAPTION_LIMIT) {
       try {
         const r = await tg('sendPhoto', {
@@ -325,7 +366,7 @@ async function sendStream(chatId, playlistKey, s, env, extraKeyboard = []) {
       } catch (e) {}
     }
 
-    // 3) Short caption on photo + full link as reply
+    // 3) Short caption + reply
     try {
       const r = await tg('sendPhoto', {
         chat_id: chatId,
@@ -347,7 +388,7 @@ async function sendStream(chatId, playlistKey, s, env, extraKeyboard = []) {
     } catch (e) {}
   }
 
-  // 4) No logo → Markdown text message
+  // 4) No logo → text
   await tg('sendMessage', {
     chat_id: chatId,
     text: streamMessage(playlistKey, s),
@@ -408,6 +449,7 @@ export default {
         url:           s.url,
         cookieLen:     s.cookie ? s.cookie.length : 0,
         cookiePreview: s.cookie ? s.cookie.substring(0, 120) + '...' : '(empty)',
+        cookieExpires: getCookieExpiryIST(s.cookie, s.url) || '(not found)',
         drm:           s.drm || '(none)',
         referer:       s.referer || HEADER_DEFAULTS[key]?.referer || '',
         origin:        s.origin  || HEADER_DEFAULTS[key]?.origin  || '',
@@ -440,7 +482,7 @@ export default {
       if (update.callback_query) {
         const cq     = update.callback_query;
         const chatId = cq.message.chat.id;
-        const m      = (cq.data || '').match(/^s:([a-z]+):(\d+)$/);
+        const m      = (cq.data || '').match(/^s:([a-z0-9]+):(\d+)$/);
 
         if (m) {
           const playlistKey = m[1];
@@ -488,10 +530,12 @@ export default {
         msg += `• /jtv — ${streams.jtv.length} channels\n`;
         msg += `• /star — ${streams.star.length} channels\n`;
         msg += `• /sony — ${streams.sony.length} channels\n`;
-        msg += `• /zee — ${streams.zee.length} channels\n\n`;
+        msg += `• /zee — ${streams.zee.length} channels\n`;
+        msg += `• /zee5 — ${streams.zee5.length} channels\n\n`;
         msg += '*Direct access:*\n';
         msg += '• `/jtv153` → JioTV channel with **tvg-id=153**\n';
         msg += '• `/willow5` → 5th item in willow playlist\n';
+        msg += '• `/zee51` → 1st item in zee5 playlist\n';
         msg += 'Use /list for the full list.';
 
         await tg('sendMessage', {
@@ -552,11 +596,21 @@ export default {
         return new Response('OK');
       }
 
-      // ---- /willow5, /hotstar10, /jtv153, /zee123 ----
-      const m = command.match(/^([a-z]+)(\d+)$/);
-      if (m && PLAYLISTS[m[1]]) {
-        const playlistKey = m[1];
-        const numStr      = m[2];
+      // ---- /willow5, /hotstar10, /jtv153, /zee51, etc. ----
+      // Try longest matching playlist key first so /zee51 → zee5 + 1
+      let playlistKey = null;
+      let numStr      = null;
+      for (let split = command.length - 1; split > 0; split--) {
+        const k = command.substring(0, split);
+        const n = command.substring(split);
+        if (/^\d+$/.test(n) && PLAYLISTS[k]) {
+          playlistKey = k;
+          numStr      = n;
+          break;
+        }
+      }
+
+      if (playlistKey) {
         const num         = parseInt(numStr, 10);
         const streams     = await getStreams();
         const list        = streams[playlistKey] || [];
@@ -592,7 +646,7 @@ export default {
       // ---- Unknown ----
       await tg('sendMessage', {
         chat_id: chatId,
-        text: `❌ Unknown command: /${command}\nTry /willow, /fancode, /sonyliv, /hotstar, /jtv, /star, /sony, /zee, or /help.`,
+        text: `❌ Unknown command: /${command}\nTry /willow, /fancode, /sonyliv, /hotstar, /jtv, /star, /sony, /zee, /zee5, or /help.`,
         reply_markup: { inline_keyboard: channelKeyboard() }
       }, env);
 
