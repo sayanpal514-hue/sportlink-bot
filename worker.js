@@ -22,13 +22,13 @@ const PLAYLISTS = {
   star:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/Star2.m3u",
   sony:    "https://raw.githubusercontent.com/sportlink10/playlist/refs/heads/main/sony5.m3u",
   zee:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/zee.m3u",
-  zee5:    "https://raw.githubusercontent.com/doctor-8trange/quarnex/refs/heads/main/data/zee5.m3u"
+  Zee:    "https://raw.githubusercontent.com/doctor-8trange/quarnex/refs/heads/main/data/zee5.m3u"
 };
 
 const BOT_USERNAME = 'magnet10_bot';
 
 const TVGID_ONLY     = ['jtv'];
-const PIPE_PLAYLISTS = ['willow', 'fancode', 'hotstar', 'star', 'jtv', 'sony', 'zee', 'zee5'];
+const PIPE_PLAYLISTS = ['willow', 'fancode', 'hotstar', 'star', 'jtv', 'sony', 'zee', 'Zee'];
 
 const HEADER_DEFAULTS = {
   willow:  { referer: '', origin: '' },
@@ -38,7 +38,7 @@ const HEADER_DEFAULTS = {
   jtv:     { referer: 'https://www.jiotv.com/',    origin: 'https://www.jiotv.com' },
   star:    { referer: 'https://www.hotstar.com/',  origin: 'https://www.hotstar.com' },
   sony:    { referer: 'https://www.sonyliv.com/',  origin: 'https://www.sonyliv.com' },
-  zee:     { referer: '',                          origin: '' },
+  zee:     { referer: 'https://www.jiotv.com/',    origin: 'https://www.jiotv.com' },   // ← FIXED
   zee5:    {
     referer:   'https://www.zee5.com/',
     origin:    'https://www.zee5.com',
