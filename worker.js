@@ -18,9 +18,9 @@ const PLAYLISTS = {
   fancode: "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.m3u",
   sonyliv: "https://raw.githubusercontent.com/drmlive/sliv-live-events/refs/heads/main/sonyliv.m3u",
   hotstar: "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/hotstar.m3u",
-  jtv:     "https://raw.githubusercontent.com/sportlink10/playlist/refs/heads/main/jtvplus7.m3u",
+  jtv:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlis/heads/main/jtvplus7.m3u",
   star:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/Star2.m3u",
-  sony:    "https://raw.githubusercontent.com/sportlink10/playlist/refs/heads/main/sony5.m3u",
+  sony:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlis/refs/heads/main/sony5.m3u",
   zee:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/zee.m3u"
 };
 
