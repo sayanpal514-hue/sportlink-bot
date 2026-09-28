@@ -3,41 +3,48 @@
 //    <url>|Cookie=<c>&Referer=<r>&Origin=<o>[&drmScheme=clearkey&drmLicense=<d>]
 //
 //  Commands:
-//    /willow /fancode /sonyliv /hotstar /jtv /star /sony /zee
-//    /jtv153       → item with tvg-id="153"  (ONLY tvg-id lookup for jtv)
-//    /willow5      → 5th item (index based for all other playlists)
+//    /willow /fancode /sonyliv /zee5  →  EVENT playlists
+//    /hotstar /jtv /star /sony /zee   →  CHANNEL playlists
+//    /jtv143       → item with tvg-id="143"  (tvg-id lookup for jtv)
+//    /hotstar55    → 55th item (index lookup for others)
 //    /list /help
 //
 //  Bot ONLY responds to:
 //    /command
-//    /command@magnet10_bot
+//    /command@sportlink_jhs10_bot
 // ================================================================
 
 const PLAYLISTS = {
   willow:  "https://raw.githubusercontent.com/srhady/willow-event/refs/heads/main/live_sports.m3u",
   fancode: "https://raw.githubusercontent.com/doctor-8trange/zyphx8/refs/heads/main/data/fancode.m3u",
   sonyliv: "https://raw.githubusercontent.com/drmlive/sliv-live-events/refs/heads/main/sonyliv.m3u",
+  zee5:    "https://raw.githubusercontent.com/doctor-8trange/quarnex/refs/heads/main/data/zee5.m3u",
   hotstar: "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/hotstar.m3u",
-  jtv:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlis/heads/main/jtvplus7.m3u",
+  jtv:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/jtvplus7.m3u",
   star:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/Star2.m3u",
-  sony:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlis/refs/heads/main/sony5.m3u",
+  sony:    "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/sony5.m3u",
   zee:     "https://raw.githubusercontent.com/sportlive18/jio-tv-auto-update-playlist/refs/heads/main/zee.m3u"
 };
 
-const BOT_USERNAME = 'magnet10_bot';
+// Event vs Channel grouping (for /help text only)
+const EVENT_PLAYLISTS   = ['willow', 'fancode', 'sonyliv', 'zee5'];
+const CHANNEL_PLAYLISTS = ['hotstar', 'jtv', 'star', 'sony', 'zee'];
+
+const BOT_USERNAME = 'sportlink_jhs10_bot';   // ← FIXED
 
 const TVGID_ONLY     = ['jtv'];
-const PIPE_PLAYLISTS = ['willow', 'fancode', 'hotstar', 'star', 'jtv', 'sony', 'zee'];
+const PIPE_PLAYLISTS = ['willow', 'fancode', 'hotstar', 'star', 'jtv', 'sony', 'zee', 'zee5'];
 
 const HEADER_DEFAULTS = {
   willow:  { referer: '', origin: '' },
   fancode: { referer: '', origin: '' },
   sonyliv: { referer: 'https://www.sonyliv.com/',  origin: 'https://www.sonyliv.com' },
+  zee5:    { referer: 'https://www.zee5.com/',     origin: 'https://www.zee5.com' },
   hotstar: { referer: 'https://www.hotstar.com/',  origin: 'https://www.hotstar.com' },
   jtv:     { referer: 'https://www.jiotv.com/',    origin: 'https://www.jiotv.com' },
   star:    { referer: 'https://www.hotstar.com/',  origin: 'https://www.hotstar.com' },
   sony:    { referer: 'https://www.sonyliv.com/',  origin: 'https://www.sonyliv.com' },
-  zee:     { referer: '',                          origin: '' }
+  zee:     { referer: 'https://www.jiotv.com/',    origin: 'https://www.jiotv.com' }
 };
 
 const CHANNEL_TG = 'https://t.me/sportlink10';
@@ -109,15 +116,16 @@ function parseM3U(content) {
       }
 
       current = {
-        id:      idMatch    ? idMatch[1]    : '',
-        name:    nameMatch  ? nameMatch[1]  : fallbackName,
-        group:   groupMatch ? groupMatch[1] : '',
-        logo:    logoMatch  ? logoMatch[1]  : '',
-        url:     '',
-        drm:     '',
-        cookie:  '',
-        referer: '',
-        origin:  ''
+        id:        idMatch    ? idMatch[1]    : '',
+        name:      nameMatch  ? nameMatch[1]  : fallbackName,
+        group:     groupMatch ? groupMatch[1] : '',
+        logo:      logoMatch  ? logoMatch[1]  : '',
+        url:       '',
+        drm:       '',
+        cookie:    '',
+        referer:   '',
+        origin:    '',
+        userAgent: ''
       };
     }
     else if (line.startsWith('#KODIPROP:inputstream.adaptive.license_key=') && current) {
@@ -148,6 +156,9 @@ function parseM3U(content) {
     else if (line.startsWith('#EXTVLCOPT:http-extra-headers=Origin:') && current) {
       current.origin = line.split('Origin:')[1]?.trim() || '';
     }
+    else if (line.startsWith('#EXTVLCOPT:http-user-agent=') && current) {
+      current.userAgent = line.substring('#EXTVLCOPT:http-user-agent='.length).trim();
+    }
     else if (line.startsWith('#EXTVLCOPT:') && current) {
       const rest = line.substring('#EXTVLCOPT:'.length);
       const eq   = rest.indexOf('=');
@@ -157,6 +168,7 @@ function parseM3U(content) {
         if (key.includes('cookie')  && !current.cookie)  current.cookie  = val;
         if (key.includes('refer')   && !current.referer) current.referer = val;
         if (key.includes('origin')  && !current.origin)  current.origin  = val;
+        if (key.includes('user-agent') && !current.userAgent) current.userAgent = val;
       }
     }
     else if (!line.startsWith('#') && current) {
@@ -177,10 +189,16 @@ async function getStreams() {
     Object.entries(PLAYLISTS).map(async ([key, url]) => {
       try {
         const res = await fetch(url, { cf: { cacheTtl: 60 } });
-        if (!res.ok) { all[key] = []; return; }
+        if (!res.ok) {
+          console.log(`[${key}] fetch failed: HTTP ${res.status}`);
+          all[key] = [];
+          return;
+        }
         const text = await res.text();
         all[key] = parseM3U(text);
+        console.log(`[${key}] loaded ${all[key].length} items`);
       } catch (e) {
+        console.log(`[${key}] fetch error: ${e.message}`);
         all[key] = [];
       }
     })
@@ -223,6 +241,7 @@ function buildFinalUrl(playlistKey, s) {
   const parts = [];
 
   if (s.cookie) parts.push(`Cookie=${s.cookie}`);
+  if (s.userAgent) parts.push(`User-Agent=${s.userAgent}`);
 
   const referer = s.referer || def.referer;
   if (referer) parts.push(`Referer=${referer}`);
@@ -248,9 +267,7 @@ function asCode(link) {
   return '`' + clean + '`';
 }
 
-// ================================================================
-//  Cookie expiry (IST) — extract `exp=<unix>` and format in IST (UTC+5:30)
-// ================================================================
+// ---------- Cookie expiry (IST) ----------
 function getCookieExpiryIST(cookie) {
   if (!cookie) return '';
   const m = cookie.match(/\bexp=(\d{9,11})/i);
@@ -258,7 +275,6 @@ function getCookieExpiryIST(cookie) {
   const expUnix = parseInt(m[1], 10);
   if (!expUnix || isNaN(expUnix)) return '';
 
-  // IST = UTC + 5h 30m
   const IST_OFFSET_MIN = 5 * 60 + 30;
   const istMs = (expUnix + IST_OFFSET_MIN * 60) * 1000;
   const d = new Date(istMs);
@@ -274,12 +290,11 @@ function getCookieExpiryIST(cookie) {
   return `${Y}-${M}-${D} ${h}:${m2}:${s2} IST`;
 }
 
-// ---------- Short photo caption ----------
+// ---------- Captions ----------
 function photoCaptionShort(num, s) {
   return `${num}) ${s.name}`;
 }
 
-// ---------- Markdown caption for photo (copyable link + expiry) ----------
 function markdownCaption(playlistKey, num, s) {
   const link = finalLink(playlistKey, s);
   let t = `*${num}\\)* ${escapeMd(s.name)}\n`;
@@ -292,7 +307,6 @@ function markdownCaption(playlistKey, num, s) {
   return t;
 }
 
-// ---------- Plain fallback caption ----------
 function plainCaption(playlistKey, num, s) {
   const link = finalLink(playlistKey, s);
   let t = `${num}) ${s.name}`;
@@ -305,7 +319,6 @@ function plainCaption(playlistKey, num, s) {
   return t;
 }
 
-// ---------- Markdown message for no-logo fallback ----------
 function streamMessage(playlistKey, s) {
   const link = finalLink(playlistKey, s);
   let msg = `📺 *${escapeMd(s.name)}*\n`;
@@ -326,7 +339,6 @@ async function sendStream(chatId, playlistKey, s, env, extraKeyboard = []) {
   const plainCaptionV = plainCaption(playlistKey, 1, s);
 
   if (s.logo && /^https?:\/\//i.test(s.logo)) {
-    // 1) Markdown caption
     if (mdCaption.length <= CAPTION_LIMIT) {
       try {
         const r = await tg('sendPhoto', {
@@ -337,13 +349,9 @@ async function sendStream(chatId, playlistKey, s, env, extraKeyboard = []) {
           reply_markup: { inline_keyboard: keyboard }
         }, env);
         if (r && r.ok) return;
-        console.log('sendPhoto markdown failed:', JSON.stringify(r));
-      } catch (e) {
-        console.log('sendPhoto exception:', e.message);
-      }
+      } catch (e) {}
     }
 
-    // 2) Plain-text caption
     if (plainCaptionV.length <= CAPTION_LIMIT) {
       try {
         const r = await tg('sendPhoto', {
@@ -356,7 +364,6 @@ async function sendStream(chatId, playlistKey, s, env, extraKeyboard = []) {
       } catch (e) {}
     }
 
-    // 3) Short caption + reply
     try {
       const r = await tg('sendPhoto', {
         chat_id: chatId,
@@ -378,7 +385,6 @@ async function sendStream(chatId, playlistKey, s, env, extraKeyboard = []) {
     } catch (e) {}
   }
 
-  // 4) No logo → text
   await tg('sendMessage', {
     chat_id: chatId,
     text: streamMessage(playlistKey, s),
@@ -425,7 +431,17 @@ export default {
         s = list[parseInt(idxStr) - 1];
       }
 
-      if (!s) return new Response(`No entry /${key}/${idxStr}`, { status: 404 });
+      if (!s) {
+        return new Response(JSON.stringify({
+          error: 'Not found',
+          playlist: key,
+          query: idxStr,
+          loadedCount: list.length,
+          hint: TVGID_ONLY.includes(key)
+            ? 'No channel with that tvg-id'
+            : `Index must be between 1 and ${list.length}`
+        }, null, 2), { status: 404, headers: { 'Content-Type': 'application/json' } });
+      }
 
       const finalUrl  = finalLink(key, s);
       const mdCaption = markdownCaption(key, 1, s);
@@ -441,11 +457,13 @@ export default {
         cookiePreview: s.cookie ? s.cookie.substring(0, 120) + '...' : '(empty)',
         cookieExpires: getCookieExpiryIST(s.cookie) || '(not found)',
         drm:           s.drm || '(none)',
+        userAgent:     s.userAgent || '(none)',
         referer:       s.referer || HEADER_DEFAULTS[key]?.referer || '',
         origin:        s.origin  || HEADER_DEFAULTS[key]?.origin  || '',
         finalUrl,
         captionLen:    mdCaption.length,
-        fitsInCaption: mdCaption.length <= CAPTION_LIMIT
+        fitsInCaption: mdCaption.length <= CAPTION_LIMIT,
+        totalInPlaylist: list.length
       }, null, 2), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -472,7 +490,7 @@ export default {
       if (update.callback_query) {
         const cq     = update.callback_query;
         const chatId = cq.message.chat.id;
-        const m      = (cq.data || '').match(/^s:([a-z]+):(\d+)$/);
+        const m      = (cq.data || '').match(/^s:([a-z0-9]+):(\d+)$/);
 
         if (m) {
           const playlistKey = m[1];
@@ -511,18 +529,22 @@ export default {
       if (command === 'start' || command === 'help') {
         const streams = await getStreams();
         let msg = '👋 *Sports Bot — All Playlists*\n\n';
+
         msg += '*Event Playlists:*\n';
-        msg += `• /willow — ${streams.willow.length} matches\n`;
-        msg += `• /fancode — ${streams.fancode.length} matches\n`;
-        msg += `• /sonyliv — ${streams.sonyliv.length} matches\n\n`;
-        msg += '*Channel Playlists:*\n';
-        msg += `• /hotstar — ${streams.hotstar.length} channels\n`;
-        msg += `• /jtv — ${streams.jtv.length} channels\n`;
-        msg += `• /star — ${streams.star.length} channels\n`;
-        msg += `• /sony — ${streams.sony.length} channels\n`;
-        msg += `• /zee — ${streams.zee.length} channels\n\n`;
-        msg += '*Direct access:*\n';
-        msg += '• `/jtv153` → JioTV channel with **tvg-id=153**\n';
+        for (const key of EVENT_PLAYLISTS) {
+          const n = (streams[key] || []).length;
+          msg += `• /${key} — ${n} match${n === 1 ? '' : 'es'}\n`;
+        }
+
+        msg += '\n*Channel Playlists:*\n';
+        for (const key of CHANNEL_PLAYLISTS) {
+          const n = (streams[key] || []).length;
+          msg += `• /${key} — ${n} channel${n === 1 ? '' : 's'}\n`;
+        }
+
+        msg += '\n*Direct access:*\n';
+        msg += '• `/jtv143` → JioTV channel with **tvg-id=143**\n';
+        msg += '• `/hotstar55` → 55th channel in hotstar\n';
         msg += '• `/willow5` → 5th item in willow playlist\n';
         msg += 'Use /list for the full list.';
 
@@ -584,14 +606,23 @@ export default {
         return new Response('OK');
       }
 
-      // ---- /willow5, /hotstar10, /jtv153, /zee123 ----
-      const m = command.match(/^([a-z]+)(\d+)$/);
-      if (m && PLAYLISTS[m[1]]) {
-        const playlistKey = m[1];
-        const numStr      = m[2];
-        const num         = parseInt(numStr, 10);
-        const streams     = await getStreams();
-        const list        = streams[playlistKey] || [];
+      // ---- /hotstar55, /sony22, /jtv143, /willow5, /zee512 ----
+      let playlistKey = null;
+      let numStr      = null;
+      for (let split = command.length - 1; split > 0; split--) {
+        const k = command.substring(0, split);
+        const n = command.substring(split);
+        if (/^\d+$/.test(n) && PLAYLISTS[k]) {
+          playlistKey = k;
+          numStr      = n;
+          break;
+        }
+      }
+
+      if (playlistKey) {
+        const num     = parseInt(numStr, 10);
+        const streams = await getStreams();
+        const list    = streams[playlistKey] || [];
 
         let stream      = null;
         let notFoundMsg = '';
@@ -599,12 +630,18 @@ export default {
         if (TVGID_ONLY.includes(playlistKey)) {
           stream = list.find(s => s.id && String(s.id) === numStr);
           if (!stream) {
-            notFoundMsg = `❌ No channel with *tvg-id* \`${numStr}\` in /${playlistKey}.\nUse /${playlistKey} to see available channels.`;
+            notFoundMsg =
+              `❌ No channel with *tvg-id* \`${numStr}\` in /${playlistKey}.\n` +
+              `Playlist has *${list.length}* channel${list.length === 1 ? '' : 's'} loaded.\n` +
+              `Use /${playlistKey} to see available channels.`;
           }
         } else {
           stream = list[num - 1];
           if (!stream) {
-            notFoundMsg = `❌ Item #${num} not found in /${playlistKey}.\nUse /${playlistKey} to see available items.`;
+            notFoundMsg =
+              `❌ Item #${num} not found in /${playlistKey}.\n` +
+              `Playlist has *${list.length}* item${list.length === 1 ? '' : 's'} loaded.\n` +
+              `Use /${playlistKey} to see available items.`;
           }
         }
 
@@ -624,7 +661,7 @@ export default {
       // ---- Unknown ----
       await tg('sendMessage', {
         chat_id: chatId,
-        text: `❌ Unknown command: /${command}\nTry /willow, /fancode, /sonyliv, /hotstar, /jtv, /star, /sony, /zee, or /help.`,
+        text: `❌ Unknown command: /${command}\nTry /willow, /fancode, /sonyliv, /zee5, /hotstar, /jtv, /star, /sony, /zee, or /help.`,
         reply_markup: { inline_keyboard: channelKeyboard() }
       }, env);
 
